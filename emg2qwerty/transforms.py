@@ -7,6 +7,7 @@
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, TypeVar
+import torch.nn.functional as F
 
 import numpy as np
 import torch
@@ -256,11 +257,28 @@ class SpecAugment:
 @dataclass
 class TimeStretch:
     """Stretches or compresses the time axis of the signal."""
-    
+
     stretch_factor: float  # > 1 stretches, < 1 compresses
+    stack_dim: int = 1     # The dimension along which the left and right data are stacked (default: 1)
+
+    def __post_init__(self) -> None:
+        assert self.stretch_factor > 0  # Stretch factor should be greater than 0
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        return torch.nn.functional.interpolate(tensor.unsqueeze(0), scale_factor=self.stretch_factor, mode='linear').squeeze(0)
+        # Ensure tensor is in 5D shape (batch, channels, segments, length)
+        if tensor.ndimension() == 5:
+            # Flatten the batch and segment dimensions to apply interpolation
+            tensor = tensor.view(-1, tensor.shape[2], tensor.shape[3])  # (batch * segments, channels, length)
+
+        # Apply time stretching or compression
+        stretched_tensor = F.interpolate(tensor, scale_factor=self.stretch_factor, mode='linear', align_corners=False)
+
+        # Reshape back to original 5D shape
+        if stretched_tensor.ndimension() == 3 and stretched_tensor.shape[0] != tensor.shape[0]:
+            stretched_tensor = stretched_tensor.view(tensor.shape[0], tensor.shape[1], -1, stretched_tensor.shape[-1])
+
+        return stretched_tensor
+    
 @dataclass
 class RandomFrequencyShift:
     """Randomly shifts the frequency of the input signal."""
@@ -271,6 +289,8 @@ class RandomFrequencyShift:
         # Simulating frequency shift by adding/subtracting random noise in the frequency domain
         shift = np.random.randint(-self.shift_range, self.shift_range)
         return tensor.roll(shift, dims=-1)  # Assuming the last dimension represents the frequency
+
+
 @dataclass
 class AdditiveNoise:
     """Adds random noise to the input signal."""
@@ -278,8 +298,10 @@ class AdditiveNoise:
     noise_factor: float = 0.1  # The strength of the noise
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        # Correct noise generation with mean and std
         noise = torch.randn_like(tensor) * self.noise_factor
         return tensor + noise
+
 @dataclass
 class RandomTimeShift:
     """Randomly shifts the signal along the time axis."""
@@ -289,15 +311,25 @@ class RandomTimeShift:
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
         shift = np.random.randint(-self.max_shift, self.max_shift + 1)
         return tensor.roll(shift, dims=0)  # Shifting along the time axis (T dimension)
+
 @dataclass
 class RandomCrop:
     """Randomly crops a segment of the signal."""
     
-    crop_size: int  # Size of the cropped segment
+    crop_percentage: float  # Percentage of the tensor to crop (0.0 - 1.0)
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        start = np.random.randint(0, tensor.shape[0] - self.crop_size)
-        return tensor[start:start + self.crop_size]
+        crop_size = int(tensor.shape[0] * self.crop_percentage)
+        
+        crop_size = max(crop_size, 1)
+        
+        if tensor.shape[0] <= crop_size:
+            raise ValueError(f"Tensor size ({tensor.shape[0]}) is smaller than the calculated crop size ({crop_size})")
+        
+        start = np.random.randint(0, tensor.shape[0] - crop_size)
+        
+        return tensor[start:start + crop_size]
+    
 @dataclass
 class TimeWarp:
     """Applies a time-warping transformation to the signal."""
@@ -310,6 +342,8 @@ class TimeWarp:
         time_axis = np.arange(tensor.shape[0])
         warped_time_axis = np.interp(time_axis, time_axis * warp_factor, time_axis)
         return torch.tensor(np.interp(warped_time_axis, time_axis, tensor.numpy()))
+
+
 @dataclass
 class RandomDropout:
     """Randomly zeroes out a percentage of the input signal."""
@@ -319,6 +353,8 @@ class RandomDropout:
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
         mask = (torch.rand_like(tensor) > self.dropout_rate).float()
         return tensor * mask
+    
+
 @dataclass
 class GaussianSmoothing:
     """Applies Gaussian smoothing to the signal."""
@@ -330,6 +366,8 @@ class GaussianSmoothing:
         from scipy.ndimage import gaussian_filter1d
         smoothed_tensor = gaussian_filter1d(tensor.numpy(), sigma=self.sigma, axis=0)
         return torch.tensor(smoothed_tensor)
+    
+
 @dataclass
 class RandomElectrodeDropout:
     """Randomly drops one or more electrode channels."""
@@ -342,6 +380,7 @@ class RandomElectrodeDropout:
         drop_indices = np.random.choice(num_channels, drop_count, replace=False)
         tensor[..., drop_indices] = 0
         return tensor
+    
 @dataclass
 class RandomSignalScaling:
     """Randomly scales the signal."""

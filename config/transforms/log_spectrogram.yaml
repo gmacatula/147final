@@ -25,6 +25,61 @@ specaug:
   n_freq_masks: 2
   freq_mask_param: 4
 
+# my augmentations
+frequency_shift:
+  _target_: emg2qwerty.transforms.ForEach
+  transform:
+    _target_: emg2qwerty.transforms.RandomBandRotation
+    offsets: [1, -1]  # Shifting frequencies by 1 or -1
+  batch_dim: 1  # Assuming batch dimension is 1, adjust as needed
+
+# random_noise:
+#   _target_: emg2qwerty.transforms.Lambda
+#   lambd:
+#     _target_: torch.randn
+#     # Using size for generating the noise and adjusting mean, std afterward
+#     size: [batch_size, feature_size]  # Specify the size (e.g., batch_size and feature_size)
+#     mean: 0
+#     std: 0.01
+
+time_stretch:
+  _target_: emg2qwerty.transforms.TimeStretch
+  stretch_factor: 1.2  # Stretch factor greater than 1 speeds up, less than 1 slows down
+  # n_freq: 256  # Specify the frequency bins (though this is not used in your class yet)
+
+crop:
+  _target_: emg2qwerty.transforms.RandomCrop
+  crop_percentage: 0.95 #what percentage of the OG data to keep
+
+# random_dropout.yaml
+random_dropout:
+  _target_: emg2qwerty.transforms.RandomDropout
+  dropout_rate: 0.1  # Fraction of the input signal to drop
+
+# gaussian_smoothing.yaml
+gaussian_smoothing:
+  _target_: emg2qwerty.transforms.GaussianSmoothing
+  kernel_size: 3  # Size of the Gaussian kernel
+  sigma: 1.0  # Standard deviation of the Gaussian filter
+
+# random_electrode_dropout.yaml
+random_electrode_dropout:
+  _target_: emg2qwerty.transforms.RandomElectrodeDropout
+  drop_rate: 0.2  # Percentage of electrodes to drop
+
+
+# random_signal_scaling.yaml
+random_signal_scaling:
+  _target_: emg2qwerty.transforms.RandomSignalScaling
+  scaling_factor_range:
+    - 0.8  # Min scaling factor
+    - 1.2  # Max scaling factor
+
+
+
+
+
+
 transforms:
   train:
     - ${to_tensor}
@@ -32,6 +87,14 @@ transforms:
     - ${temporal_jitter}
     - ${logspec}
     - ${specaug}
+    # - ${frequency_shift}  # working but dupe
+    # - ${random_noise}  # bug
+    # - ${time_stretch}  # bug
+    # - ${crop} #working
+    # - ${random_dropout} # could work 
+    # - ${gaussian_smoothing} #could work 
+    # - ${random_electrode_dropout}
+    # - ${random_signal_scaling}
 
   val:
     - ${to_tensor}
