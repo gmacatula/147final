@@ -1,7 +1,7 @@
 defaults:
   - user: single_user
   - transforms: log_spectrogram
-  - model: tds_conv_ctc
+  - model: tdsConvLstmCtc
   - optimizer: adamW
   - lr_scheduler: oneCycleLR
   - decoder: ctc_greedy

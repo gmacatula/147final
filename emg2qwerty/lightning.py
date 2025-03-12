@@ -25,6 +25,7 @@ from emg2qwerty.modules import (
     MultiBandRotationInvariantMLP,
     SpectrogramNorm,
     TDSConvEncoder,
+    TDSLSTMEncoder
 )
 from emg2qwerty.transforms import Transform
 
@@ -169,11 +170,23 @@ class TDSConvCTCModule(pl.LightningModule):
             ),
             # (T, N, num_features)
             nn.Flatten(start_dim=2),
-            TDSConvEncoder(
+
+
+
+            # TDSConvEncoder(
+            #     num_features=num_features,
+            #     block_channels=block_channels,
+            #     kernel_width=kernel_width,
+            # ),
+
+            TDSLSTMEncoder(
                 num_features=num_features,
-                block_channels=block_channels,
-                kernel_width=kernel_width,
+                lstm_hidden_size=128,
+                num_lstm_layers=4,
             ),
+
+
+
             # (T, N, num_classes)
             nn.Linear(num_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
@@ -269,3 +282,84 @@ class TDSConvCTCModule(pl.LightningModule):
             optimizer_config=self.hparams.optimizer,
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
+
+
+class TDSConvLstmCTCModule(pl.LightningModule):
+    NUM_BANDS: ClassVar[int] = 2
+    ELECTRODE_CHANNELS: ClassVar[int] = 16
+
+    def __init__(
+        self,
+        in_features: int,
+        mlp_features: Sequence[int],
+        block_channels: Sequence[int],
+        kernel_width: int,
+        lstm_hidden_size: int = 128,
+        num_lstm_layers: int = 2,
+        optimizer: DictConfig = None,
+        lr_scheduler: DictConfig = None,
+        decoder: DictConfig = None,
+    ) -> None:
+        super().__init__()
+        self.save_hyperparameters()
+
+        num_features = self.NUM_BANDS * mlp_features[-1]
+
+        # Model
+        self.model = nn.Sequential(
+            # (T, N, bands=2, C=16, freq)
+            SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
+            # (T, N, bands=2, mlp_features[-1])
+            MultiBandRotationInvariantMLP(
+                in_features=in_features,
+                mlp_features=mlp_features,
+                num_bands=self.NUM_BANDS,
+            ),
+            # (T, N, num_features)
+            nn.Flatten(start_dim=2),
+            
+            # TDS Convolutional layers
+            TDSConvEncoder(
+                num_features=num_features,
+                block_channels=block_channels,
+                kernel_width=kernel_width,
+            ),
+            
+            # LSTM layers
+            TDSLSTMEncoder(
+                num_features=num_features,
+                lstm_hidden_size=lstm_hidden_size,
+                num_lstm_layers=num_lstm_layers,
+            ),
+            
+            # Output layer
+            nn.Linear(num_features, charset().num_classes),
+            nn.LogSoftmax(dim=-1),
+        )
+
+        # Criterion
+        self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
+
+        # Decoder
+        self.decoder = instantiate(decoder)
+
+        # Metrics
+        metrics = MetricCollection([CharacterErrorRates()])
+        self.metrics = nn.ModuleDict(
+            {
+                f"{phase}_metrics": metrics.clone(prefix=f"{phase}/")
+                for phase in ["train", "val", "test"]
+            }
+        )
+
+    # Reuse the same methods as TDSConvCTCModule
+    forward = TDSConvCTCModule.forward
+    _step = TDSConvCTCModule._step
+    _epoch_end = TDSConvCTCModule._epoch_end
+    training_step = TDSConvCTCModule.training_step
+    validation_step = TDSConvCTCModule.validation_step
+    test_step = TDSConvCTCModule.test_step
+    on_train_epoch_end = TDSConvCTCModule.on_train_epoch_end
+    on_validation_epoch_end = TDSConvCTCModule.on_validation_epoch_end
+    on_test_epoch_end = TDSConvCTCModule.on_test_epoch_end
+    configure_optimizers = TDSConvCTCModule.configure_optimizers
