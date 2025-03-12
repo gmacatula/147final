@@ -10,7 +10,8 @@ import pprint
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
-
+from itertools import combinations
+import torch
 
 import hydra
 import pytorch_lightning as pl
@@ -22,6 +23,15 @@ from emg2qwerty.transforms import Transform
 
 
 log = logging.getLogger(__name__)
+
+
+
+
+
+
+
+
+
 
 
 @hydra.main(version_base=None, config_path="../config", config_name="base")
@@ -123,6 +133,13 @@ def main(config: DictConfig):
         "best_checkpoint": trainer.checkpoint_callback.best_model_path,
     }
     pprint.pprint(results, sort_dicts=False)
+
+
+
+
+
+
+
 
 
 if __name__ == "__main__":

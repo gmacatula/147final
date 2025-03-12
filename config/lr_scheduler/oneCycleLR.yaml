@@ -1,0 +1,11 @@
+# @package _global_
+lr_scheduler:
+  scheduler:
+    _target_: torch.optim.lr_scheduler.OneCycleLR
+    max_lr: 1e-3
+    total_steps: 3000000 # Total training steps
+    pct_start: 0.3
+    anneal_strategy: cos
+    div_factor: 25.0
+    final_div_factor: 1e4
+  interval: step

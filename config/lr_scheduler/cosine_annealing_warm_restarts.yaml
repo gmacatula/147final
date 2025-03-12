@@ -6,3 +6,8 @@ lr_scheduler:
     T_mult: 2
     eta_min: 1e-6
   interval: epoch
+
+
+
+  
+#one cycle llr

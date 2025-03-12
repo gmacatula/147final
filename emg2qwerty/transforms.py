@@ -12,6 +12,7 @@ import torch.nn.functional as F
 import numpy as np
 import torch
 import torchaudio
+from time import sleep
 
 
 TTransformIn = TypeVar("TTransformIn")
@@ -253,7 +254,83 @@ class SpecAugment:
 
 
 
-# MY CUSTOM CLASSES
+# MY CUSTOM CLASSES@dataclass
+
+
+@dataclass
+class FFTTransform:
+    """Computes the FFT of the input tensor and normalizes the result across all channels and bins.
+
+    Args:
+        n_bins (int): Number of frequency bins to compute.
+    """
+
+    n_bins: int
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        # Compute the FFT
+        fft_result = torch.fft.fft(tensor, n=self.n_bins, dim=0)
+        
+        # Compute the magnitude of the FFT result
+        magnitude = torch.abs(fft_result)
+        
+        # Normalize the magnitude across all channels and bins
+        mean = magnitude.mean()
+        std = magnitude.std()
+        normalized_magnitude = (magnitude - mean) / std
+        
+        return normalized_magnitude
+
+
+@dataclass
+class Normalize:
+    """Normalizes the input tensor to have zero mean and unit variance across all channels.
+
+    Args:
+        mean (float): The mean value for normalization. If None, it will be computed from the data.
+        std (float): The standard deviation value for normalization. If None, it will be computed from the data.
+    """
+
+    mean: float = None
+    std: float = None
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        if self.mean is None:
+            self.mean = tensor.mean().item()
+        if self.std is None:
+            self.std = tensor.std().item()
+        return (tensor - self.mean) / self.std
+
+
+@dataclass
+class NormalizePerChannel:
+    """Normalizes the input tensor to have zero mean and unit variance for each channel independently.
+
+    Args:
+        mean (torch.Tensor): The mean values for normalization. If None, they will be computed from the data.
+        std (torch.Tensor): The standard deviation values for normalization. If None, they will be computed from the data.
+    """
+
+    mean: torch.Tensor = None
+    std: torch.Tensor = None
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        mask = ~torch.isnan(tensor)
+
+        if self.mean is None:
+            self.mean = torch.where(mask, tensor, torch.tensor(0.0)).sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True)
+            print(f"Self.mean",self.mean)
+            sleep(1)
+        if self.std is None:
+            self.std = torch.sqrt(torch.where(mask, (tensor - self.mean) ** 2, torch.tensor(0.0)).sum(dim=0, keepdim=True) / mask.sum(dim=0, keepdim=True))
+            print(f"Self.std",self.std)
+            sleep(1)
+        normalized_tensor = (tensor - self.mean) / self.std
+        if torch.isnan(normalized_tensor).any():
+            raise ValueError("NaN values found in normalized tensor")
+        return normalized_tensor
+
+
+    
 @dataclass
 class TimeStretch:
     """Stretches or compresses the time axis of the signal."""

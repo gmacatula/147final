@@ -76,8 +76,21 @@ random_signal_scaling:
     - 1.2  # Max scaling factor
 
 
+fft_transform:
+  _target_: emg2qwerty.transforms.FFTTransform
+  n_bins: 256  # Number of frequency bins to compute
 
+# Add Normalize
+normalize:
+  _target_: emg2qwerty.transforms.Normalize
+  mean: 0.01
+  std: 0.5
 
+# Add NormalizePerChannel
+normalize_per_channel:
+  _target_: emg2qwerty.transforms.NormalizePerChannel
+  mean: 0.01
+  std: 0.5
 
 
 transforms:
@@ -87,14 +100,17 @@ transforms:
     - ${temporal_jitter}
     - ${logspec}
     - ${specaug}
+    # - ${fft_transform}  # Add FFTTransform to the training pipeline
+    # - ${normalize}  # Add Normalize to the training pipeline
     # - ${frequency_shift}  # working but dupe
     # - ${random_noise}  # bug
     # - ${time_stretch}  # bug
     # - ${crop} #working
-    # - ${random_dropout} # could work 
+    # - ${random_dropout} # working
     # - ${gaussian_smoothing} #could work 
-    # - ${random_electrode_dropout}
-    # - ${random_signal_scaling}
+    # - ${random_electrode_dropout} #could work 
+    # - ${random_signal_scaling} #could work 
+    # - ${normalize_per_channel} #could work
 
   val:
     - ${to_tensor}
