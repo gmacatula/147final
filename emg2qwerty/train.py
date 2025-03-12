@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+
 import hydra
 import pytorch_lightning as pl
 from hydra.utils import get_original_cwd, instantiate

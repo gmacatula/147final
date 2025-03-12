@@ -4,7 +4,9 @@ defaults:
 
 hydra:
   run:
-    dir: /checkpoint/${oc.env:USER}/emg2qwerty/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    # dir: /checkpoint/${oc.env:USER}/emg2qwerty/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: /root/emg2qwerty/output/2025-03-11/10-38-40
+
   launcher:
     submitit_folder: ${hydra.run.dir}/submitit_logs/%j
     timeout_min: 2880
