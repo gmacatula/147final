@@ -124,8 +124,11 @@ def main(config: DictConfig):
 
     # Validate and test on the best checkpoint (if training), or on the
     # loaded `config.checkpoint` (otherwise)
-    val_metrics = trainer.validate(module, datamodule)
-    test_metrics = trainer.test(module, datamodule)
+    with torch.no_grad():
+        val_metrics = trainer.validate(module, datamodule)
+        torch.cuda.empty_cache()
+        print(torch.cuda.memory_summary())
+        test_metrics = trainer.test(module, datamodule)
 
     results = {
         "val_metrics": val_metrics,
