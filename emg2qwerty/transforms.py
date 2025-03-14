@@ -247,7 +247,51 @@ class SpecAugment:
         return x.movedim(-1, 0)
 
 
+# Jimmy's custom transforms:
+@dataclass
+class MelSpectrogram:
+    """Creates mel-scaled spectrogram from an EMG signal. In the case of
+    multi-channeled signal, the channels are treated independently.
+    The input must be of shape (T, ...) and the returned spectrogram
+    is of shape (T, ..., freq).
 
+    Args:
+        n_fft (int): Size of FFT. (default: 64)
+        hop_length (int): Number of samples to stride between consecutive
+            STFT windows. (default: 16)
+        n_mels (int): Number of mel filterbanks. (default: 33)
+        sample_rate (int): Sampling rate of the input signal. (default: 2000)
+        f_min (float): Minimum frequency. (default: 0.0)
+        f_max (float | None): Maximum frequency. (default: None)
+        log (bool): Whether to apply log10 to the mel spectrogram. (default: False)
+    """
+
+    n_fft: int = 64
+    hop_length: int = 16
+    n_mels: int = 33  # Same number of features as LogSpectrogram (n_fft//2+1)
+    sample_rate: int = 2000  # EMG sampling rate is 2kHz
+    f_min: float = 0.0
+    f_max: float | None = None
+    log: bool = False
+
+    def __post_init__(self) -> None:
+        self.mel_spectrogram = torchaudio.transforms.MelSpectrogram(
+            sample_rate=self.sample_rate,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            n_mels=self.n_mels,
+            f_min=self.f_min,
+            f_max=self.f_max,
+            normalized=True,
+            center=False,
+        )
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        x = tensor.movedim(0, -1)  # (T, ..., C) -> (..., C, T)
+        mel_spec = self.mel_spectrogram(x)  # (..., C, n_mels, T)
+        if self.log:
+            mel_spec = torch.log10(mel_spec + 1e-6)  # Apply log10 to compress dynamic range
+        return mel_spec.movedim(-1, 0)  # (T, ..., C, n_mels)
 
 
 
