@@ -1,9 +1,9 @@
 defaults:
   - user: single_user
-  - transforms: wavelet_transform
-  - model: tdsConvLstmCtc #tds_conv_ctc #tdsConvLstmCtc
+  - transforms: mel_spectrogram
+  - model: conv_transformer_ctc #tdsConvLstmCtc #tds_conv_ctc #tdsConvLstmCtc
   - optimizer: adamW
-  - lr_scheduler: oneCycleLR
+  - lr_scheduler: oneCycleLR  # oneCycleLR
   - decoder: ctc_greedy
   - cluster: local
   - _self_

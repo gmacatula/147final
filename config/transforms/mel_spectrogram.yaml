@@ -42,4 +42,6 @@ transforms:
     - ${to_tensor}
     - ${melspec}
 
-  test: ${transforms.val}
+  test:
+    - ${to_tensor}
+    - ${melspec}
