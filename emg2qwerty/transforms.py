@@ -409,16 +409,64 @@ class RandomCrop:
     
 @dataclass
 class TimeWarp:
-    """Applies a time-warping transformation to the signal."""
+    """Applies time-warping transformation to EMG signals.
     
-    max_warp: float = 0.1  # Max warp factor (in percentage)
-
+    
+    Args:
+        max_warp (float): Maximum global warping factor (default: 0.1)
+        num_control_points (int): Number of control points for local warping (default: 5)
+        local_warp_scale (float): Scale of local warping perturbations (default: 0.05)
+    """
+    
+    max_warp: float = 0.01
+    num_control_points: int = 10
+    local_warp_scale: float = 0.01
+    
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        # Create a time warping function and apply to tensor
-        warp_factor = np.random.uniform(1 - self.max_warp, 1 + self.max_warp)
-        time_axis = np.arange(tensor.shape[0])
-        warped_time_axis = np.interp(time_axis, time_axis * warp_factor, time_axis)
-        return torch.tensor(np.interp(warped_time_axis, time_axis, tensor.numpy()))
+        # Save original device and dtype
+        device = tensor.device
+        dtype = tensor.dtype
+        
+        # Convert to numpy and move time dimension last
+        x = tensor.cpu().numpy()
+        orig_shape = x.shape
+        
+        # Reshape to 2D: (time, features)
+        if len(orig_shape) > 2:
+            x = x.reshape(orig_shape[0], -1)
+        
+        T = x.shape[0]
+        time_axis = np.linspace(0, T-1, T)
+        
+        # Generate warping function
+        global_warp = np.random.uniform(1 - self.max_warp, 1 + self.max_warp)
+        control_x = np.linspace(0, T-1, self.num_control_points)
+        control_y = control_x * global_warp
+        
+        # Add local perturbations (keep endpoints fixed)
+        perturbations = np.random.uniform(
+            -self.local_warp_scale, 
+            self.local_warp_scale, 
+            size=self.num_control_points
+        ) * T
+        perturbations[0] = perturbations[-1] = 0
+        control_y += perturbations
+        
+        # Create warped time points
+        warped_time = np.interp(time_axis, control_x, control_y)
+        
+        # Apply warping to all features simultaneously
+        warped = np.stack([
+            np.interp(time_axis, warped_time, x[:, i])
+            for i in range(x.shape[1])
+        ], axis=1)
+        
+        # Reshape back to original dimensions
+        if len(orig_shape) > 2:
+            warped = warped.reshape(orig_shape)
+        
+        # Convert back to tensor
+        return torch.from_numpy(warped).to(device=device, dtype=dtype)
 
 
 @dataclass

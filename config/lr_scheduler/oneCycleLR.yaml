@@ -3,7 +3,7 @@ lr_scheduler:
   scheduler:
     _target_: torch.optim.lr_scheduler.OneCycleLR
     max_lr: 1e-3
-    total_steps: 4064 #127*32 # Total training steps
+    total_steps: 19050 #127*32 # Total training steps = epochs * steps per epoch
     pct_start: 0.3
     anneal_strategy: cos
     div_factor: 100.0
