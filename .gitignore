@@ -56,3 +56,5 @@ wikitext-103-raw*
 
 data/
 .venv/
+
+*.ckpt
