@@ -1,6 +1,6 @@
 defaults:
   - user: single_user
-  - transforms: mel_spectrogram
+  - transforms: wavelet_transform
   - model: tdsConvLstmCtc #tds_conv_ctc #tdsConvLstmCtc
   - optimizer: adamW
   - lr_scheduler: oneCycleLR
