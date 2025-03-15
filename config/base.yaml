@@ -1,16 +1,16 @@
 defaults:
   - user: single_user
-  - transforms: log_spectrogram
-  - model: tdsConvLstmCtc #tds_conv_ctc #tdsConvLstmCtc
+  - transforms: mel_spectrogram
+  - model: tdsConvLstmCtc #tdsConvLstmCtc #tds_conv_ctc #tdsConvLstmCtc
   - optimizer: adamW
-  - lr_scheduler: oneCycleLR
+  - lr_scheduler: linear_warmup_cosine_annealing  # oneCycleLR
   - decoder: ctc_greedy
   - cluster: local
   - _self_
 
 seed: 1501
 batch_size: 32
-num_workers: 4  # Number of workers for dataloading
+num_workers: 8  # Number of workers for dataloading
 train: True  # Whether to train or only run validation and test
 checkpoint: null  # Optional path to checkpoint file
 monitor_metric: val/CER
@@ -20,7 +20,7 @@ trainer:
   accelerator: gpu
   devices: 1
   num_nodes: 1
-  max_epochs: 30 #30!
+  max_epochs: 150 #30!
   default_root_dir: ${hydra:runtime.output_dir}
 
 callbacks:

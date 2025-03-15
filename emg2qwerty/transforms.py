@@ -247,8 +247,158 @@ class SpecAugment:
         return x.movedim(-1, 0)
 
 
+# Jimmy's custom transforms:
+@dataclass
+class MelSpectrogram:
+    """Creates mel-scaled spectrogram from an EMG signal. In the case of
+    multi-channeled signal, the channels are treated independently.
+    The input must be of shape (T, ...) and the returned spectrogram
+    is of shape (T, ..., freq).
+
+    Args:
+        n_fft (int): Size of FFT. (default: 64)
+        hop_length (int): Number of samples to stride between consecutive
+            STFT windows. (default: 16)
+        n_mels (int): Number of mel filterbanks. (default: 33)
+        sample_rate (int): Sampling rate of the input signal. (default: 2000)
+        f_min (float): Minimum frequency. (default: 0.0)
+        f_max (float | None): Maximum frequency. (default: None)
+        log (bool): Whether to apply log10 to the mel spectrogram. (default: False)
+    """
+
+    n_fft: int = 64
+    hop_length: int = 16
+    n_mels: int = 33  # Same number of features as LogSpectrogram (n_fft//2+1)
+    sample_rate: int = 2000  # EMG sampling rate is 2kHz
+    f_min: float = 0.0
+    f_max: float | None = None
+    log: bool = False
+
+    def __post_init__(self) -> None:
+        self.mel_spectrogram = torchaudio.transforms.MelSpectrogram(
+            sample_rate=self.sample_rate,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            n_mels=self.n_mels,
+            f_min=self.f_min,
+            f_max=self.f_max,
+            normalized=True,
+            center=False,
+        )
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        x = tensor.movedim(0, -1)  # (T, ..., C) -> (..., C, T)
+        mel_spec = self.mel_spectrogram(x)  # (..., C, n_mels, T)
+        if self.log:
+            mel_spec = torch.log10(mel_spec + 1e-6)  # Apply log10 to compress dynamic range
+        return mel_spec.movedim(-1, 0)  # (T, ..., C, n_mels)
+
+@dataclass
+class WaveletTransform:
+    """Creates a wavelet-based time-frequency representation of an EMG signal.
+    In the case of multi-channeled signal, the channels are treated independently.
+    The input must be of shape (T, ...) and the returned wavelet coefficients
+    are of shape (T, ..., freq).
+
+    Args:
+        num_freq_bins (int): Number of frequency bins to output (default: 33)
+        wavelet (str): Wavelet to use (default: 'morl')
+        sample_rate (int): Sampling rate of the input signal (default: 2000)
+        hop_length (int): Number of samples between consecutive frames (default: 16)
+        min_freq (float): Minimum frequency to analyze (default: 10.0)
+        max_freq (float): Maximum frequency to analyze (default: 500.0)
+        log (bool): Whether to apply log10 to the wavelet scalogram (default: False)
+    """
+
+    num_freq_bins: int = 33  # Same number of features as LogSpectrogram
+    wavelet: str = 'morl'  # Morlet wavelet is good for time-frequency analysis
+    sample_rate: int = 2000  # EMG sampling rate is 2kHz
+    hop_length: int = 16
+    min_freq: float = 10.0  # Lower frequency bound for EMG
+    max_freq: float = 500.0  # Upper frequency bound for EMG
+    log: bool = False
+
+    def __post_init__(self) -> None:
+        try:
+            import pywt
+            import numpy as np
+            self.pywt = pywt
+            self.np = np
+        except ImportError:
+            raise ImportError("PyWavelets (pywt) is required for WaveletTransform")
+        
+        # Ensure min_freq is greater than 0 to avoid log10(0)
+        if self.min_freq <= 0:
+            self.min_freq = 0.1  # Set a safe minimum value
+        
+        # Ensure max_freq is a numeric value
+        if self.max_freq is None or not isinstance(self.max_freq, (int, float)):
+            self.max_freq = self.sample_rate / 2  # Use Nyquist frequency as default
+        
+        # Get central frequency of the wavelet
+        if self.wavelet == 'morl':
+            central_freq = 0.8125  # For Morlet wavelet
+        else:
+            wavelet = self.pywt.ContinuousWavelet(self.wavelet)
+            central_freq = wavelet.center_frequency
+        
+        # Calculate scales from frequencies: scale = central_freq * sample_rate / freq
+        freqs = self.np.logspace(
+            self.np.log10(self.min_freq), 
+            self.np.log10(self.max_freq), 
+            self.num_freq_bins
+        )
+        self.scales = central_freq * self.sample_rate / freqs
 
 
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        original_device = tensor.device
+        
+        # Move time dimension to the end for processing
+        x = tensor.movedim(0, -1)  # (T, ..., C) -> (..., C, T)
+        
+        # Convert to numpy for pywt processing
+        x_np = x.detach().cpu().numpy()
+        
+        # Get output shape, preserving original dimensions
+        shape = list(x_np.shape)
+        time_dim = shape[-1]
+        
+        # Calculate output time dimension after downsampling
+        output_time = (time_dim - 1) // self.hop_length + 1
+        output_shape = shape[:-1] + [self.num_freq_bins, output_time]
+        
+        # Allocate output array
+        wavelet_coeffs = self.np.zeros(output_shape, dtype=np.float32)
+        
+        # Process each channel independently
+        for idx in self.np.ndindex(tuple(shape[:-1])):
+            # Get signal for this specific channel
+            signal = x_np[idx]
+            
+            # Perform wavelet transform (CWT)
+            coeffs, _ = self.pywt.cwt(signal, self.scales, self.wavelet, 
+                                    1.0/self.sample_rate)
+            
+            # Downsample in time to match hop_length
+            coeffs_downsampled = coeffs[:, ::self.hop_length]
+            
+            # Take magnitude (like a spectrogram)
+            scalogram = self.np.abs(coeffs_downsampled)
+            
+            # Store in output array
+            wavelet_coeffs[idx] = scalogram[:, :output_time]  # Ensure exact output size
+        
+        # Convert back to torch tensor and move to original device
+        result = torch.from_numpy(wavelet_coeffs).to(original_device)
+        
+        # Apply log transformation if requested
+        if self.log:
+            result = torch.log10(result + 1e-6)
+        
+        # Move time dimension back to the front
+        return result.movedim(-1, 0)  # (..., freq, T) -> (T, ..., freq)
 
 
 
