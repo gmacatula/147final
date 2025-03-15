@@ -19,8 +19,8 @@ melspec:
   hop_length: 16
   n_mels: 33
   sample_rate: 2000
-  f_min: 0 # 10.0 # 0
-  f_max: # 500.0 # None
+  f_min: 10 # 10.0 # 0
+  f_max: 500 # 500.0 # None
   log: false # true
 
 specaug:

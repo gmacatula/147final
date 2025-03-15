@@ -3,7 +3,7 @@ defaults:
   - transforms: mel_spectrogram
   - model: conv_transformer_ctc #tdsConvLstmCtc #tds_conv_ctc #tdsConvLstmCtc
   - optimizer: adamW
-  - lr_scheduler: oneCycleLR  # oneCycleLR
+  - lr_scheduler: linear_warmup_cosine_annealing  # oneCycleLR
   - decoder: ctc_greedy
   - cluster: local
   - _self_
@@ -20,7 +20,7 @@ trainer:
   accelerator: gpu
   devices: 1
   num_nodes: 1
-  max_epochs: 30 #30!
+  max_epochs: 150 #30!
   default_root_dir: ${hydra:runtime.output_dir}
 
 callbacks:
