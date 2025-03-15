@@ -10,6 +10,8 @@ module:
   num_encoder_layers: 4
   dim_feedforward: 1536
   dropout: 0.1
+  use_layer_norm: True
+  transformer_norm_first: True
 
 datamodule:
   _target_: emg2qwerty.lightning.WindowedEMGDataModule

@@ -777,9 +777,14 @@ class TDSConvTransformerCTCModule(pl.LightningModule):
         optimizer: DictConfig = None,
         lr_scheduler: DictConfig = None,
         decoder: DictConfig = None,
+        # New parameters layer normalization
+        use_layer_norm: bool = False,
+        transformer_norm_first: bool = False,
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
+
+        self.use_layer_norm = use_layer_norm
 
         num_features = self.NUM_BANDS * mlp_features[-1]
         
@@ -792,6 +797,12 @@ class TDSConvTransformerCTCModule(pl.LightningModule):
             mlp_features=mlp_features,
             num_bands=self.NUM_BANDS,
         )
+        
+        # Layer normalization layers (if enabled)
+        if self.use_layer_norm:
+            self.post_mlp_norm = nn.LayerNorm(num_features)
+            self.post_conv_norm = nn.LayerNorm(num_features)
+            self.pre_output_norm = nn.LayerNorm(num_features)
         
         # TDS Convolutional layers
         self.conv_encoder = TDSConvEncoder(
@@ -807,13 +818,14 @@ class TDSConvTransformerCTCModule(pl.LightningModule):
         # Positional encoding
         self.positional_encoding = SinusoidalPositionalEncoding(d_model, dropout)
         
-        # Transformer encoder
+        # Transformer encoder with optional norm_first
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
             batch_first=False,  # Time dimension first
+            norm_first=transformer_norm_first,  # Option to apply normalization first
         )
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layer=encoder_layer,
@@ -856,8 +868,16 @@ class TDSConvTransformerCTCModule(pl.LightningModule):
         # Flatten the bands dimension
         x = x.flatten(start_dim=2)  # (T, N, bands*features)
         
+        # Apply layer norm after MLP if enabled
+        if self.use_layer_norm:
+            x = self.post_mlp_norm(x)
+        
         # Apply TDS Conv Encoder
         x = self.conv_encoder(x)  # (T, N, features)
+        
+        # Apply layer norm after conv encoder if enabled
+        if self.use_layer_norm:
+            x = self.post_conv_norm(x)
         
         # Project to transformer dimension
         x = self.input_projection(x)  # (T, N, d_model)
@@ -870,6 +890,10 @@ class TDSConvTransformerCTCModule(pl.LightningModule):
         
         # Project back to original feature dimension
         x = self.output_projection(x)  # (T, N, features)
+        
+        # Apply layer norm before output layer if enabled
+        if self.use_layer_norm:
+            x = self.pre_output_norm(x)
         
         # Apply output layer
         x = self.output_layer(x)  # (T, N, num_classes)
@@ -946,6 +970,5 @@ class TDSConvTransformerCTCModule(pl.LightningModule):
             optimizer_config=self.hparams.optimizer,
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
-
 
     
