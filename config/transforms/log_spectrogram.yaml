@@ -93,6 +93,12 @@ normalize_per_channel:
   std: 0.5
 
 
+timeWarp:
+  _target_: emg2qwerty.transforms.TimeWarp
+  max_warp: 0.1
+  num_control_points: 5
+  local_warp_scale: 0.05
+
 transforms:
   train:
     - ${to_tensor}
@@ -111,6 +117,7 @@ transforms:
     # - ${random_electrode_dropout} #could work 
     # - ${random_signal_scaling} #could work 
     # - ${normalize_per_channel} #could work
+    # - ${timeWarp} #works well!
 
   val:
     - ${to_tensor}

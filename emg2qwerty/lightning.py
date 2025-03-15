@@ -189,17 +189,17 @@ class OGTDSConvCTCModule(pl.LightningModule):
 
 
 
-            # TDSConvEncoder(
-            #     num_features=num_features,
-            #     block_channels=block_channels,
-            #     kernel_width=kernel_width,
-            # ),
-
-            TDSLSTMEncoder(
+            TDSConvEncoder(
                 num_features=num_features,
-                lstm_hidden_size=128,
-                num_lstm_layers=4,
+                block_channels=block_channels,
+                kernel_width=kernel_width,
             ),
+
+            # TDSLSTMEncoder(
+            #     num_features=num_features,
+            #     lstm_hidden_size=128,
+            #     num_lstm_layers=4,
+            # ),
 
 
 
