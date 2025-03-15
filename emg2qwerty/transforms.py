@@ -568,8 +568,13 @@ class TimeWarp:
         warp_factor = np.random.uniform(1 - self.max_warp, 1 + self.max_warp)
         time_axis = np.arange(tensor.shape[0])
         warped_time_axis = np.interp(time_axis, time_axis * warp_factor, time_axis)
-        return torch.tensor(np.interp(warped_time_axis, time_axis, tensor.numpy()))
-
+        
+        # Apply interpolation for each channel separately
+        warped_tensor = np.zeros_like(tensor.numpy())
+        for i in range(tensor.shape[1]):
+            warped_tensor[:, i] = np.interp(warped_time_axis, time_axis, tensor[:, i].numpy())
+        
+        return torch.tensor(warped_tensor)
 
 @dataclass
 class RandomDropout:
